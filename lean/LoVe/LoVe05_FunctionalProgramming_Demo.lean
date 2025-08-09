@@ -394,7 +394,7 @@ theorem length_zip {α β : Type} (xs : List α) (ys : List β) :
     length (zip xs ys) = min (length xs) (length ys) :=
   by
     induction xs generalizing ys with
-    | nil           => simp [min, length]
+    | nil           => simp [zip, min, length]
     | cons x xs' ih =>
       cases ys with
       | nil        => rfl

@@ -421,7 +421,7 @@ instance List.length.Preorder {α : Type} : Preorder (List α) :=
       by
         intro xs ys zs
         exact Nat.le_trans
-    lt_iff_le_not_le :=
+    lt_iff_le_not_ge :=
       by
         intro a b
         exact Nat.lt_iff_le_not_le }

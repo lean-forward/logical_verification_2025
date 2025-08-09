@@ -490,6 +490,8 @@ theorem Nat.symm_manual (x y : ℕ) (h : x = y) :
     apply symm
     hypothesis
 
+set_option maxHeartbeats 1000000
+
 theorem Nat.trans (x y z : ℕ) (hxy : x = y) (hyz : y = z) :
     x = z :=
   by prove_direct

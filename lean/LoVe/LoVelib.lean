@@ -4,8 +4,8 @@ Xavier Généreux, Johannes Hölzl, and Jannis Limperg. See `LICENSE.txt`. -/
 import Aesop
 import Mathlib.Algebra.Field.Defs
 import Mathlib.Algebra.Order.Ring.Abs
-import Mathlib.Algebra.BigOperators.Group.List
-import Mathlib.Algebra.BigOperators.Group.Multiset
+import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.BigOperators.Group.Multiset.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Tree.Basic
 import Mathlib.Tactic.Linarith
@@ -151,7 +151,7 @@ instance Set.PartialOrder {α : Type} : PartialOrder (Set α) :=
       by
         intro A B C hAB hBC a ha
         aesop,
-    lt_iff_le_not_le :=
+    lt_iff_le_not_ge :=
       by
         intro A B
         apply Iff.intro
