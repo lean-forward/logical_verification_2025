@@ -1,0 +1,120 @@
+# ai-generated: GitHub Actions rejects unknown top-level keys, so the usual YAML
+# front matter `tags:` list cannot be used here. The `ai-generated` tag is recorded
+# in this comment instead.
+name: Lean
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Changed modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.modules.outputs.modules }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Emits a JSON array of module names for the build matrix. Only modules whose
+      # file is in the diff are included. If anything else under `lean/` (toolchain,
+      # manifest, lakefile, ...) or this workflow changed, every module may be
+      # affected, so all of them are built. Manual runs also build everything.
+      - name: Compute changed modules
+        id: modules
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          all_files() { ls lean/LoVe/*.lean; }
+
+          case "$EVENT" in
+            pull_request) range="$PR_BASE...$PR_HEAD" ;;
+            push)         range="$PUSH_BEFORE..$PUSH_AFTER" ;;
+            *)            range="" ;;
+          esac
+
+          if [ -z "$range" ] || ! changed=$(git diff --name-only --diff-filter=d "$range"); then
+            files=$(all_files)
+          elif grep -qvE '^lean/LoVe/[^/]+\.lean$' <<< "$changed"; then
+            files=$(all_files)
+          else
+            files=$(grep -E '^lean/LoVe/[^/]+\.lean$' <<< "$changed" || true)
+          fi
+
+          modules=$(
+            for file in $files; do
+              echo "LoVe.$(basename "$file" .lean)"
+            done | jq -R . | jq -sc .
+          )
+          echo "Modules: $modules"
+          echo "modules=$modules" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.module }}
+    needs: changes
+    if: needs.changes.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.changes.outputs.modules) }}
+
+    defaults:
+      run:
+        working-directory: lean
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://elan.lean-lang.org/elan-init.sh \
+            | sh -s -- -y --default-toolchain none --no-modify-path
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # Keyed on the toolchain and manifest so the dependencies are only re-fetched
+      # when the Mathlib pin changes, and restored from the newest older commit
+      # otherwise. Saved by actions/cache's post-job step, after the build. Matrix
+      # jobs share the key, so only the first to finish saves it.
+      - name: Cache Lake packages and build artifacts
+        uses: actions/cache@v6
+        with:
+          path: lean/.lake
+          key: lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean/lean-toolchain', 'lean/lake-manifest.json') }}-${{ github.sha }}
+          restore-keys: |
+            lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean/lean-toolchain', 'lean/lake-manifest.json') }}-
+
+      - name: Download Mathlib oleans
+        run: lake exe cache get
+
+      # `LoVe.lean` is the library root but imports the instructor solutions
+      # (`_DemoMaster`, `_Exercise`, `_HomeworkA`/`_HomeworkB`), which are not
+      # published in this repository, so the root cannot be built here. Build the
+      # module for this matrix entry instead.
+      - name: Build
+        run: lake build "${{ matrix.module }}"

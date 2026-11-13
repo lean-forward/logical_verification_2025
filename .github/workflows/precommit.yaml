@@ -1,0 +1,41 @@
+# ai-generated: GitHub Actions rejects unknown top-level keys, so the usual YAML
+# front matter `tags:` list cannot be used here. The `ai-generated` tag is recorded
+# in this comment instead.
+name: pre-commit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: Run hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The actionlint and gitleaks hooks are `language: golang`, so pre-commit
+      # builds them with the Go toolchain on the runner.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
